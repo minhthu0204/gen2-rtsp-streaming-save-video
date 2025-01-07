@@ -24,7 +24,7 @@ if __name__ == "__main__":
     colorCam.setFps(FPS)
 
     videnc = pipeline.create(dai.node.VideoEncoder)
-    videnc.setDefaultProfilePreset(FPS, dai.VideoEncoderProperties.Profile.H265_MAIN)
+    videnc.setDefaultProfilePreset(FPS, dai.VideoEncoderProperties.Profile.MJPEG)
     colorCam.video.link(videnc.input)
 
     veOut = pipeline.create(dai.node.XLinkOut)
@@ -51,7 +51,7 @@ if __name__ == "__main__":
         print("Running stream may be unstable due to connection... (protocol: {})".format(device_info.protocol))
 
     # Mở tệp để lưu video
-    output_file = open("output.h265", "wb")
+    output_file = open("output.mp4", "wb")
 
     try:
         with dai.Device(pipeline, device_info) as device:
