@@ -7,7 +7,7 @@ from gi.repository import Gst, GLib
 import depthai as dai
 
 class UdpStream:
-    def __init__(self, host='192.168.1.192', port=5601):
+    def __init__(self, host='192.168.1.26', port=400):
         Gst.init(None)
         self.host = host
         self.port = port
@@ -38,7 +38,7 @@ class UdpStream:
             'appsrc name=source is-live=true block=true format=GST_FORMAT_TIME ! '
             'h265parse ! tee name=t '
             't. ! queue ! rtph265pay pt=96 ! udpsink host={} port={} '
-            't. ! queue ! mp4mux ! fakesink'.format(self.host, self.port)
+            't. ! queue ! mp4mux ! filesink location=output_video.mp4'.format(self.host, self.port)
         )
         appsrc = self.pipeline.get_by_name('source')
         if appsrc:
@@ -55,7 +55,7 @@ class UdpStream:
 
 
 if __name__ == "__main__":
-    server = UdpStream(host='192.168.1.192', port=5601)
+    server = UdpStream(host='192.168.1.26', port=5400)
     server.setup_pipeline()
 
     pipeline = dai.Pipeline()
@@ -69,6 +69,7 @@ if __name__ == "__main__":
 
     videnc = pipeline.create(dai.node.VideoEncoder)
     videnc.setDefaultProfilePreset(FPS, dai.VideoEncoderProperties.Profile.H265_MAIN)
+    videnc.setBitrate(2000000)
     colorCam.video.link(videnc.input)
 
     veOut = pipeline.create(dai.node.XLinkOut)
