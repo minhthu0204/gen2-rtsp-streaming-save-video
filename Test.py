@@ -7,11 +7,10 @@ from gi.repository import Gst, GLib
 import depthai as dai
 
 class UdpStream:
-    def __init__(self, host='192.168.1.192', port=5601, output_file='output.h265'):
+    def __init__(self, host='192.168.1.192', port=5601):
         Gst.init(None)
         self.host = host
         self.port = port
-        self.output_file = output_file
         self.pipeline = None
         self.data = None
 
@@ -35,10 +34,10 @@ class UdpStream:
                     print("Error pushing buffer:", retval)
 
     def setup_pipeline(self):
-        # Pipeline để ghi dữ liệu H.265 vào file
         self.pipeline = Gst.parse_launch(
-            f'appsrc name=source is-live=true block=true format=GST_FORMAT_TIME ! '
-            f'h265parse ! matroskamux ! filesink location={self.output_file}'
+            'appsrc name=source is-live=true block=true format=GST_FORMAT_TIME ! '
+            'h265parse ! tee name=t ! queue ! rtph265pay pt=96 ! udpsink host={} port={} '
+            't. ! queue ! h265parse ! mp4mux ! filesink location=output.mp4'.format(self.host, self.port)
         )
         appsrc = self.pipeline.get_by_name('source')
         if appsrc:
@@ -53,13 +52,10 @@ class UdpStream:
             if retval != Gst.FlowReturn.OK:
                 print("Error pushing buffer:", retval)
 
-
 if __name__ == "__main__":
-    # Thiết lập server để lưu dữ liệu vào file output.h265
-    server = UdpStream(host='192.168.1.192', port=5601, output_file='output.h265')
+    server = UdpStream(host='192.168.1.192', port=5601)
     server.setup_pipeline()
 
-    # Tạo pipeline DepthAI
     pipeline = dai.Pipeline()
 
     FPS = 30
@@ -77,7 +73,6 @@ if __name__ == "__main__":
     veOut.setStreamName("encoded")
     videnc.bitstream.link(veOut.input)
 
-    # Kiểm tra thiết bị DepthAI
     device_infos = dai.Device.getAllAvailableDevices()
     if len(device_infos) == 0:
         raise RuntimeError("No DepthAI device found!")
@@ -92,15 +87,14 @@ if __name__ == "__main__":
             try:
                 device_info = device_infos[int(val)]
             except:
-                raise ValueError(f"Incorrect value supplied: {val}")
+                raise ValueError("Incorrect value supplied: {}".format(val))
 
     if device_info.protocol != dai.XLinkProtocol.X_LINK_USB_VSC:
-        print(f"Running stream may be unstable due to connection... (protocol: {device_info.protocol})")
+        print("Running stream may be unstable due to connection... (protocol: {})".format(device_info.protocol))
 
-    # Chạy pipeline và ghi video
     with dai.Device(pipeline, device_info) as device:
         encoded = device.getOutputQueue("encoded", maxSize=30, blocking=True)
-        print(f"Setup finished. Streaming video to {server.host}:{server.port} and saving to {server.output_file}")
+        print("Setup finished, streaming video over UDP to {}:{} and saving to output.mp4".format(server.host, server.port))
         while True:
             data = encoded.get().getData()
             server.send_data(data)
