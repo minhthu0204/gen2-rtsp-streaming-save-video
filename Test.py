@@ -1,61 +1,19 @@
 #!/usr/bin/env python3
 
-import threading
-import gi
-gi.require_version('Gst', '1.0')
-from gi.repository import Gst, GLib
 import depthai as dai
+import signal
+import sys
 
-class UdpStream:
-    def __init__(self, host='192.168.1.192', port=5601):
-        Gst.init(None)
-        self.host = host
-        self.port = port
-        self.pipeline = None
-        self.data = None
 
-    def start(self):
-        t = threading.Thread(target=self._thread_udp)
-        t.start()
+# Hàm để xử lý tín hiệu kết thúc (Ctrl+C)
+def signal_handler(sig, frame):
+    print("\nTerminating...")
+    sys.exit(0)
 
-    def _thread_udp(self):
-        loop = GLib.MainLoop()
-        loop.run()
 
-    def send_data(self, data):
-        self.data = data
-        if self.pipeline:
-            appsrc = self.pipeline.get_by_name('source')
-            if appsrc:
-                # Chuyển đổi dữ liệu thành Gst.Buffer
-                buffer = Gst.Buffer.new_wrapped(self.data.tobytes())
-                retval = appsrc.emit('push-buffer', buffer)
-                if retval != Gst.FlowReturn.OK:
-                    print("Error pushing buffer:", retval)
-
-    def setup_pipeline(self):
-        self.pipeline = Gst.parse_launch(
-            'appsrc name=source is-live=true block=true format=GST_FORMAT_TIME ! '
-            'h265parse ! tee name=t ! queue ! rtph265pay pt=96 ! udpsink host={} port={} '
-            't. ! queue ! h265parse ! mp4mux ! filesink location=output.mp4'.format(self.host, self.port)
-        )
-        appsrc = self.pipeline.get_by_name('source')
-        if appsrc:
-            appsrc.connect('need-data', self.on_need_data)
-        self.pipeline.set_state(Gst.State.PLAYING)
-
-    def on_need_data(self, src, length):
-        if self.data is not None:
-            # Chuyển đổi dữ liệu thành Gst.Buffer khi cần
-            buffer = Gst.Buffer.new_wrapped(self.data.tobytes())
-            retval = src.emit('push-buffer', buffer)
-            if retval != Gst.FlowReturn.OK:
-                print("Error pushing buffer:", retval)
+signal.signal(signal.SIGINT, signal_handler)
 
 if __name__ == "__main__":
-    server = UdpStream(host='192.168.1.192', port=5601)
-    server.setup_pipeline()
-
     pipeline = dai.Pipeline()
 
     FPS = 30
@@ -92,9 +50,19 @@ if __name__ == "__main__":
     if device_info.protocol != dai.XLinkProtocol.X_LINK_USB_VSC:
         print("Running stream may be unstable due to connection... (protocol: {})".format(device_info.protocol))
 
-    with dai.Device(pipeline, device_info) as device:
-        encoded = device.getOutputQueue("encoded", maxSize=30, blocking=True)
-        print("Setup finished, streaming video over UDP to {}:{} and saving to output.mp4".format(server.host, server.port))
-        while True:
-            data = encoded.get().getData()
-            server.send_data(data)
+    # Mở tệp để lưu video
+    output_file = open("output.h265", "wb")
+
+    try:
+        with dai.Device(pipeline, device_info) as device:
+            encoded = device.getOutputQueue("encoded", maxSize=30, blocking=True)
+
+            print("Recording video to 'output.h265'. Press Ctrl+C to stop.")
+            while True:
+                data = encoded.get().getData()
+                output_file.write(data)
+    except Exception as e:
+        print(f"Error occurred: {e}")
+    finally:
+        output_file.close()
+        print("Video recording stopped.")
