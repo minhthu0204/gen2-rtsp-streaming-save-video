@@ -37,7 +37,7 @@ class UdpStream:
         self.pipeline = Gst.parse_launch(
             'appsrc name=source is-live=true block=true format=GST_FORMAT_TIME ! '
             'h265parse ! tee name=t '
-            't. ! queue ! rtph265pay pt=96 ! udpsink host={} port={}'
+            't. ! queue ! rtph265pay pt=96 ! udpsink host={} port={} '
             't. ! queue ! mp4mux ! fakesink'.format(self.host, self.port)
         )
         appsrc = self.pipeline.get_by_name('source')
